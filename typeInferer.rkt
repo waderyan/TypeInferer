@@ -2,15 +2,7 @@
 
 (print-only-errors #t)
 
-(define-type Type
-  [t-num]
-  [t-bool]
-  [t-list (elem Type?)]
-  [t-fun (arg Type?) (result Type?)]
-  [t-var (v symbol?)])
- 
-(define-type Constraint
-  [eqc (lhs Type?) (rhs Type?)])
+
 
 (define-type Expr
   [num (n number?)]
@@ -286,6 +278,15 @@
 (test (alpha-vary (parse '(trest 1))) (trest (num 1)))
 
 
+(define-type Type
+  [t-num]
+  [t-bool]
+  [t-list (elem Type?)]
+  [t-fun (arg Type?) (result Type?)]
+  [t-var (v symbol?)])
+ 
+(define-type Constraint
+  [eqc (lhs Type?) (rhs Type?)])
 
 ;; 3.19.4 Constraint Generation
 
@@ -294,7 +295,23 @@
 ;;           e-id : symbol?
 ;;           e : Expr?
 (define (generate-constraints e-id e)
-  0)
+  (type-case Expr e
+   [num (n) e]
+    [id (v) e]
+    [bool (b) e]
+    [bin-num-op (op left right) e]
+    [iszero (e1) e]
+    [bif (e1 e2 e3) e]
+    [with (bound-id bound-body body) e]
+    [rec-with (bound-id bound-body body) e]
+    [fun (arg-id body) e]
+    [app (fun-expr arg-expr) e]
+    [tempty () e]
+    [tcons (first rest) e]
+    [istempty (e1) e]
+    [tfirst (e1) e]
+    [trest (e1) e]
+    ))
 
 
 ;; TESTS FOR CONSTRAINT GENERATION
