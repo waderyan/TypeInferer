@@ -2,7 +2,69 @@
 
 (print-only-errors #t)
 
+; constraint-list=? : Constraint list -> Constraint list -> Bool
+; signals an error if arguments are not variants of Constraint
+(define ((constraint-list=? lc1) lc2)
+  (define htlc1 (make-hash))
+  (define htlc2 (make-hash))
+  (or (andmap (lambda (c1 c2)
+                (and
+                 (type=?/mapping
+                  htlc1 htlc2
+                  (eqc-lhs c1) (eqc-lhs c2))
+                 (type=?/mapping
+                  htlc1 htlc2
+                  (eqc-rhs c1) (eqc-rhs c2))))
+              lc1 lc2)
+      (error 'constraint-list=?
+             "~s and ~a are not equal (modulo renaming)"
+             lc1 lc2)))
 
+; type=?/mapping : hash hash Type Type -> Bool
+; determines if types are equal modulo renaming
+(define (type=?/mapping ht1 ht2 t1 t2)
+  (define (teq? t1 t2)
+    (type=?/mapping ht1 ht2 t1 t2))
+  (cond
+    [(and (t-num? t1) (t-num? t2)) true]
+    [(and (t-bool? t1) (t-bool? t2)) true]
+    [(and (t-list? t1) (t-list? t2))
+     (teq? (t-list-elem t1) (t-list-elem t2))]
+    [(and (t-fun? t1) (t-fun? t2))
+     (and (teq? (t-fun-arg t1) (t-fun-arg t2))
+          (teq? (t-fun-result t1) (t-fun-result t2)))]
+    [(and (t-var? t1) (t-var? t2))
+     (local ([define v1 ; the symbol that ht1 says that t1 maps to
+               (hash-ref
+                ht1 (t-var-v t1)
+                (lambda ()
+                  ; if t1 doesn't map to anything, it's the first
+                  ; time we're seeing it, so map it to t2
+                  (hash-set! ht1 (t-var-v t1) (t-var-v t2))
+                  (t-var-v t2)))]
+             [define v2
+               (hash-ref
+                ht2 (t-var-v t2)
+                (lambda ()
+                  (hash-set! ht2 (t-var-v t2) (t-var-v t1))
+                  (t-var-v t1)))])
+       ; we have to check both mappings, so that distinct variables
+       ; are kept distinct. i.e. a -> b should not be isomorphic to
+       ; c -> c under the one-way mapping a => c, b => c.
+       (and (symbol=? (t-var-v t2) v1)
+            (symbol=? (t-var-v t1) v2)))]
+    [(and (Type? t1) (Type? t2)) false]
+    [else (error 'type=? "either ~a or ~a is not a Type" t1 t2)]))
+ 
+; type=? Type -> Type -> Bool
+; signals an error if arguments are not variants of Type
+(define ((type=? t1) t2)
+  (or (type=?/mapping (make-hash) (make-hash) t1 t2)
+      ; Unfortunately, test/pred simply prints false;
+      ; this helps us see what t2 was.
+      (error 'type=?
+             "~s and ~a are not equal (modulo renaming)"
+             t1 t2)))
 
 (define-type Expr
   [num (n number?)]
@@ -136,8 +198,7 @@
      [else
       (if (boolean? sexp)
           (id sexp)
-          (error "Parse: expected expr syntax"))]
-    ))
+          (error "Parse: expected expr syntax"))]))
 
 ;; PARSER TESTS
 
@@ -238,8 +299,7 @@
     [tcons (first rest) (tcons (alpha-vary first h-map) (alpha-vary rest h-map))]
     [istempty (e1) (istempty (alpha-vary e1 h-map))]
     [tfirst (e1) (tfirst (alpha-vary e1 h-map))]
-    [trest (e1) (trest (alpha-vary e1 h-map))]
-    ))
+    [trest (e1) (trest (alpha-vary e1 h-map))]))
 
 ;; TESTS FOR ALPHA-VARY
 ;; num
@@ -296,27 +356,252 @@
 ;;           e : Expr?
 (define (generate-constraints e-id e)
   (type-case Expr e
-   [num (n) e]
-    [id (v) e]
-    [bool (b) e]
-    [bin-num-op (op left right) e]
-    [iszero (e1) e]
-    [bif (e1 e2 e3) e]
-    [with (bound-id bound-body body) e]
-    [rec-with (bound-id bound-body body) e]
-    [fun (arg-id body) e]
-    [app (fun-expr arg-expr) e]
-    [tempty () e]
-    [tcons (first rest) e]
-    [istempty (e1) e]
-    [tfirst (e1) e]
-    [trest (e1) e]
-    ))
+    [num (n) (list (eqc (t-var e-id) (t-num)))]
+    [id (v) (list (eqc (t-var e-id) (t-var v)))]
+    [bool (b) (list (eqc (t-var e-id) (t-bool)))]
+    [bin-num-op (op left right)
+                (local ((define nm-left (gensym))
+                        (define nm-right (gensym)))
+                (append
+                 (generate-constraints nm-left left)
+                 (generate-constraints nm-right right)
+                 (list (eqc (t-var e-id) (t-num))
+                       (eqc (t-var nm-left) (t-num))
+                       (eqc (t-var nm-right) (t-num)))))]
+    [iszero (e1) 
+            (local ((define nm-e (gensym)))
+              (append 
+               (generate-constraints nm-e e1)
+               (list (eqc (t-var e-id) (t-bool))
+                     (eqc (t-var nm-e) (t-num)))))]
+    [bif (e1 e2 e3) 
+         (local ((define nm-e1 (gensym))
+                 (define nm-e2 (gensym))
+                 (define nm-e3 (gensym)))
+           (append 
+            (generate-constraints nm-e1 e1)
+            (generate-constraints nm-e2 e2)
+            (generate-constraints nm-e3 e3)
+            (list (eqc (t-var e-id) (t-var nm-e2))
+                  (eqc (t-var e-id) (t-var nm-e3))
+                  (eqc (t-var nm-e1) (t-bool)))))]
+    [with (bound-id bound-body body) 
+          (local ((define nm-bound-id (gensym))
+                  (define nm-bound-body (gensym))
+                  (define nm-body (gensym)))
+            (append
+             (generate-constraints nm-bound-id bound-id)
+             (generate-constraints nm-bound-body bound-body)
+             (generate-constraints nm-body body)
+             (list (eqc (t-var e-id) (t-var nm-body)))))]
+    [rec-with (bound-id bound-body body) 
+              (local ((define nm-bound-id (gensym))
+                      (define nm-bound-body (gensym))
+                      (define nm-body (gensym)))
+                (append
+                 (generate-constraints nm-bound-id bound-id)
+                 (generate-constraints nm-bound-body bound-body)
+                 (generate-constraints nm-body body)
+                 (list (eqc (t-var e-id) (t-var nm-body)))))]
+    [fun (arg-id body) 
+         (local ((define nm-arg-id (gensym))
+                 (define nm-body (gensym)))
+           (append
+            (generate-constraints nm-arg-id arg-id)
+            (generate-constraints nm-body body)
+            (list (eqc (t-var e-id) (t-fun (t-var nm-arg-id) (t-var nm-body))))))]
+    [app (fun-expr arg-expr) 
+         (local ((define nm-fun-expr (gensym))
+                 (define nm-arg-expr (gensym)))
+           (append
+            (generate-constraints nm-fun-expr fun-expr)
+            (generate-constraints nm-arg-expr arg-expr)
+            (list (eqc (t-var e-id) (t-fun (t-var nm-arg-expr) (t-var nm-fun-expr))))))]
+    [tempty () (list (eqc (t-var e-id) (t-var 'any)))]
+    [tcons (first rest) 
+           (local ((define nm-first (gensym))
+                   (define nm-rest (gensym)))
+           (append
+            (generate-constraints nm-first first)
+            (generate-constraints nm-rest rest)
+            (list (eqc (t-var e-id) (t-list (t-var nm-first)))
+                  (eqc (t-var nm-rest) (t-list (t-var nm-first))))))]
+    [istempty (e1) 
+              (local ((define nm-e1 (gensym)))
+                (append
+                 (generate-constraints nm-e1 e1)
+                 (list (eqc (t-var e-id) (t-bool))
+                       (eqc (t-var nm-e1) (t-list (t-var 'any))))))]
+    [tfirst (e1) 
+            (local ((define nm-e1 (gensym)))
+                (append
+                 (generate-constraints nm-e1 e1)
+                 (list (eqc (t-var e-id) (t-var 'any)))
+                       (eqc (t-var nm-e1) (t-list (t-var 'any)))))]
+    [trest (e1) 
+           (local ((define nm-e1 (gensym)))
+                (append
+                 (generate-constraints nm-e1 e1)
+                 (list (eqc (t-var e-id) (t-list (t-var 'any)))
+                       (eqc (t-var nm-e1) (t-list (t-var 'any))))))]))
+
 
 
 ;; TESTS FOR CONSTRAINT GENERATION
+; num
+(test (generate-constraints 'x (parse '5)) (list (eqc (t-var 'x) (t-num))))
+; id
+(test (generate-constraints 'x (parse 'hi)) (list (eqc (t-var 'x) (t-var 'hi))))
+;; bool
+(test (generate-constraints 'x (parse 'true)) (list (eqc (t-var 'x) (t-bool))))
+(test (generate-constraints 'x (parse 'false)) (list (eqc (t-var 'x) (t-bool))))
+;; bin-num-op
+((constraint-list=? 
+ (generate-constraints 'x (parse '(+ 1 2)))) 
+      (list (eqc (t-var 'g95740) (t-num)) 
+            (eqc (t-var 'g95741) (t-num)) 
+            (eqc (t-var 'x) (t-num)) 
+            (eqc (t-var 'g95740) (t-num)) 
+            (eqc (t-var 'g95741) (t-num))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(- 1 2)))) 
+      (list (eqc (t-var 'g95740) (t-num)) 
+            (eqc (t-var 'g95741) (t-num)) 
+            (eqc (t-var 'x) (t-num)) 
+            (eqc (t-var 'g95740) (t-num)) 
+            (eqc (t-var 'g95741) (t-num))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(* 1 2)))) 
+      (list (eqc (t-var 'g95740) (t-num)) 
+            (eqc (t-var 'g95741) (t-num)) 
+            (eqc (t-var 'x) (t-num)) 
+            (eqc (t-var 'g95740) (t-num)) 
+            (eqc (t-var 'g95741) (t-num))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(+ (+ 3 2) (+ 1 2)))))
+(list
+ (eqc (t-var 'g106509) (t-num))
+ (eqc (t-var 'g106510) (t-num))
+ (eqc (t-var 'g106507) (t-num))
+ (eqc (t-var 'g106509) (t-num))
+ (eqc (t-var 'g106510) (t-num))
+ (eqc (t-var 'g106511) (t-num))
+ (eqc (t-var 'g106512) (t-num))
+ (eqc (t-var 'g106508) (t-num))
+ (eqc (t-var 'g106511) (t-num))
+ (eqc (t-var 'g106512) (t-num))
+ (eqc (t-var 'x) (t-num))
+ (eqc (t-var 'g106507) (t-num))
+ (eqc (t-var 'g106508) (t-num))))
+;; iszero
+((constraint-list=? 
+  (generate-constraints 'x (parse '(iszero 0))))
+(list (eqc (t-var 'g109887) (t-num)) 
+      (eqc (t-var 'x) (t-bool)) 
+      (eqc (t-var 'g109887) (t-num))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(iszero hi))))
+ (list
+  (eqc (t-var 'g112321) (t-var 'hi))
+  (eqc (t-var 'x) (t-bool))
+  (eqc (t-var 'g112321) (t-num))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(iszero (+ 1 2)))))
+(list
+ (eqc (t-var 'g113431) (t-num))
+ (eqc (t-var 'g113432) (t-num))
+ (eqc (t-var 'g113430) (t-num))
+ (eqc (t-var 'g113431) (t-num))
+ (eqc (t-var 'g113432) (t-num))
+ (eqc (t-var 'x) (t-bool))
+ (eqc (t-var 'g113430) (t-num))))
+;; bif
+((constraint-list=?
+  (generate-constraints 'x (parse '(bif true true true))))
+(list
+ (eqc (t-var 'g115722) (t-bool))
+ (eqc (t-var 'g115723) (t-bool))
+ (eqc (t-var 'g115724) (t-bool))
+ (eqc (t-var 'x) (t-var 'g115723))
+ (eqc (t-var 'x) (t-var 'g115724))
+ (eqc (t-var 'g115722) (t-bool))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(bif 1 1 1))))
+(list
+ (eqc (t-var 'g116228) (t-num))
+ (eqc (t-var 'g116229) (t-num))
+ (eqc (t-var 'g116230) (t-num))
+ (eqc (t-var 'x) (t-var 'g116229))
+ (eqc (t-var 'x) (t-var 'g116230))
+ (eqc (t-var 'g116228) (t-bool))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(bif true 1 1))))
+(list
+ (eqc (t-var 'g116862) (t-bool))
+ (eqc (t-var 'g116863) (t-num))
+ (eqc (t-var 'g116864) (t-num))
+ (eqc (t-var 'x) (t-var 'g116863))
+ (eqc (t-var 'x) (t-var 'g116864))
+ (eqc (t-var 'g116862) (t-bool))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(bif true true 1))))
+(list
+ (eqc (t-var 'g117371) (t-bool))
+ (eqc (t-var 'g117372) (t-bool))
+ (eqc (t-var 'g117373) (t-num))
+ (eqc (t-var 'x) (t-var 'g117372))
+ (eqc (t-var 'x) (t-var 'g117373))
+ (eqc (t-var 'g117371) (t-bool))))
+;; with
+
+;; rec
+
+;; fun
+
+;; app
+
+;; tempty
+((constraint-list=?
+  (generate-constraints 'x (parse 'tempty)))
+(list (eqc (t-var 'x) (t-var 'any))))
+;; tcons
+((constraint-list=?
+  (generate-constraints 'x (parse '(tcons 1 1))))
+(list
+ (eqc (t-var 'g138032) (t-num))
+ (eqc (t-var 'g138033) (t-num))
+ (eqc (t-var 'x) (t-list (t-var 'g138032)))
+ (eqc (t-var 'g138033) (t-list (t-var 'g138032)))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(tcons true 1))))
+(list
+ (eqc (t-var 'g138516) (t-bool))
+ (eqc (t-var 'g138517) (t-num))
+ (eqc (t-var 'x) (t-list (t-var 'g138516)))
+ (eqc (t-var 'g138517) (t-list (t-var 'g138516)))))
+((constraint-list=?
+  (generate-constraints 'x (parse '(tcons true nemtpy))))
+(list
+ (eqc (t-var 'g139201) (t-bool))
+ (eqc (t-var 'g139202) (t-var 'nemtpy))
+ (eqc (t-var 'x) (t-list (t-var 'g139201)))
+ (eqc (t-var 'g139202) (t-list (t-var 'g139201)))))
+;; tempty?
+((constraint-list=?
+  (generate-constraints 'x (parse '(tempty? true))))
+(list (eqc (t-var 'g140059) (t-bool)) 
+      (eqc (t-var 'x) (t-bool)) 
+      (eqc (t-var 'g140059) (t-list (t-var 'any)))))
+;; tfirst
 
 
+;; trest
+((constraint-list=?
+  (generate-constraints 'x (parse '(trest tempty))))
+(list
+ (eqc (t-var 'g142130) (t-var 'any))
+ (eqc (t-var 'x) (t-list (t-var 'any)))
+ (eqc (t-var 'g142130) (t-list (t-var 'any)))))
 
 ;; 3.19.5 Unification
 
