@@ -417,7 +417,9 @@
             (generate-constraints nm-fun-expr fun-expr)
             (generate-constraints nm-arg-expr arg-expr)
             (list (eqc (t-var e-id) (t-fun (t-var nm-arg-expr) (t-var nm-fun-expr))))))]
-    [tempty () (list (eqc (t-var e-id) (t-var 'any)))]
+    [tempty ()
+         (local ((define nm-elem (gensym)))
+           (list (eqc (t-var e-id) (t-list (t-var nm-elem)))))]
     [tcons (first rest) 
            (local ((define nm-first (gensym))
                    (define nm-rest (gensym)))
@@ -431,19 +433,19 @@
                 (append
                  (generate-constraints nm-e1 e1)
                  (list (eqc (t-var e-id) (t-bool))
-                       (eqc (t-var nm-e1) (t-list (t-var 'any))))))]
+                       (eqc (t-var nm-e1) (t-list (t-var (gensym)))))))]
     [tfirst (e1) 
-            (local ((define nm-e1 (gensym)))
+            (local ((define nm-e1 (gensym)) (define nm-elem (gensym)))
                 (append
                  (generate-constraints nm-e1 e1)
-                 (list (eqc (t-var e-id) (t-var 'any)))
-                       (eqc (t-var nm-e1) (t-list (t-var 'any)))))]
+                 (list (eqc (t-var e-id) (t-var nm-elem)))
+                       (eqc (t-var nm-e1) (t-list (t-var nm-elem)))))]
     [trest (e1) 
-           (local ((define nm-e1 (gensym)))
+           (local ((define nm-e1 (gensym)) (define nm-elem (gensym)))
                 (append
                  (generate-constraints nm-e1 e1)
-                 (list (eqc (t-var e-id) (t-list (t-var 'any)))
-                       (eqc (t-var nm-e1) (t-list (t-var 'any))))))]))
+                 (list (eqc (t-var e-id) (t-list (t-var nm-elem)))
+                       (eqc (t-var nm-e1) (t-list (t-var nm-elem))))))]))
 
 ;; TESTS FOR CONSTRAINT GENERATION
 ; num
@@ -561,7 +563,7 @@
 ;; tempty
 ((constraint-list=?
   (generate-constraints 'x (parse 'tempty)))
-(list (eqc (t-var 'x) (t-var 'any))))
+(list (eqc (t-var 'x) (t-list (t-var 'any)))))
 ;; tcons
 ((constraint-list=?
   (generate-constraints 'x (parse '(tcons 1 1))))
@@ -597,9 +599,9 @@
 ((constraint-list=?
   (generate-constraints 'x (parse '(trest tempty))))
 (list
- (eqc (t-var 'g142130) (t-var 'any))
- (eqc (t-var 'x) (t-list (t-var 'any)))
- (eqc (t-var 'g142130) (t-list (t-var 'any)))))
+ (eqc (t-var 'g102415) (t-list (t-var 'g102417)))
+ (eqc (t-var 'x) (t-list (t-var 'g102416)))
+ (eqc (t-var 'g102415) (t-list (t-var 'g102416)))))
 
 ;; 3.19.5 Unification
 
