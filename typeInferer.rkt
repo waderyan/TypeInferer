@@ -445,8 +445,6 @@
                  (list (eqc (t-var e-id) (t-list (t-var 'any)))
                        (eqc (t-var nm-e1) (t-list (t-var 'any))))))]))
 
-
-
 ;; TESTS FOR CONSTRAINT GENERATION
 ; num
 (test (generate-constraints 'x (parse '5)) (list (eqc (t-var 'x) (t-num))))
@@ -605,12 +603,58 @@
 
 ;; 3.19.5 Unification
 
+(define (subst-type t old-id new-type)
+  (type-case Type t
+    [t-list (elem)
+      (t-list (subst-type elem old-id new-type))]
+    [t-fun (arg result)
+      (t-fun (subst-type arg old-id new-type) (subst-type result old-id new-type))]
+    [t-var (v)
+      (if (eq? v old-id) new-type t)]
+    [else t]))
+
+(define (subst-const c old-id new-type)
+  (type-case Constraint c
+     [eqc (lhs rhs)
+       (eqc
+         (subst-type lhs old-id new-type)
+         (subst-type rhs old-id new-type))]))
+
 ;; Purpose: Runs unification algorithm on a list of constraints
 ;; and determins if there is a type conflict
 ;; Contract: (unify loc) -> (listof Constraint?)
 ;;           loc : (listof Constraint?)
-(define (unify loc)
-  0)
+(define (unify loc [sub empty])
+  (if (empty? loc)
+    empty
+    (type-case Constraint (first loc)
+      [eqc (lhs rhs)
+        (local [
+            (define (unify-subst old new)
+              (unify
+                (map (λ (c) (subst-const c (t-var-v old) new)) (rest loc))
+                (cons
+                  (eqc new old)
+                  (map (λ (c) (subst-const c (t-var-v old) new)) sub))))]
+          (cond
+            [(and (t-var? lhs) (t-var? rhs)) (eq? (t-var-v lhs) (t-var-v rhs))
+              (unify (rest loc) sub)]
+            [(t-var? lhs)
+              (unify-subst lhs rhs)]
+            [(t-var? rhs)
+              (unify-subst rhs lhs)]
+            [(and (t-list? lhs) (t-list? rhs)) 
+              (unify
+                (list* (eqc (t-list-elem lhs) (t-list-elem rhs)) loc)
+                sub)]
+            [(and (t-fun? lhs) (t-fun? rhs)) 
+              (unify
+                (list*
+                  (eqc (t-fun-arg lhs) (t-fun-arg rhs))
+                  (eqc (t-fun-result lhs) (t-fun-result rhs))
+                  loc
+                sub))]
+            [else (error "Inconsistent types: ~a" (first loc))]))])))
 
 
 ;; TESTS FOR UNIFICATION
@@ -622,11 +666,13 @@
 ;; Contract: (infer-type e) -> Type?
 ;;           e : Expr?
 (define (infer-type e)
-  0)
+  (findf (λ (c) (eq? e (eqc-lhs c))) (unify (generate-constraints 'root e))))
 
 ;; TESTS FOR INFERRING TYPES
 (define (run sexp)
   (infer-type (parse sexp)))
+
+(run '(+ 1 1))
 
 
 
