@@ -684,19 +684,25 @@
 (define (run sexp)
   (infer-type (parse sexp)))
 
-(define (tt sexp type)
-  (test ((type=? (run sexp)) type) #t))
-(define (tt/exn sexp)
-  (test/exn (run sexp) ""))
+(define (type-is sexp type)
+  ((type=? (run sexp)) type))
 
 ;;num
-(tt '1 (t-num))
+(test (type-is '1 (t-num)) #t)
   
-;;bool
+;;true
+(test (type-is 'true (t-bool)) #t)
+
+;;false
+(test (type-is 'false (t-bool)) #t)
+
+;;plus
+(test (type-is '(+ 1 1) (t-num)) #t)
+(test/exn (run '(+ 0 true)) "")
+(test/exn (run '(+ tempty 0)) "")
+(test/exn (run '(+ (fun (a) true) 0)) "")
+
+(run '(fun (a) true))
 
 
-(tt 'true (t-bool))
-(tt 'false (t-bool))
-(tt 'tempty (t-list (t-var 'a)))
-(tt 'tempty (t-list (t-var 'a)))
 
