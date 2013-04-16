@@ -626,7 +626,7 @@
 ;;           loc : (listof Constraint?)
 (define (unify loc [sub empty])
   (if (empty? loc)
-    empty
+    sub
     (type-case Constraint (first loc)
       [eqc (lhs rhs)
         (local [
@@ -634,7 +634,7 @@
               (unify
                 (map (λ (c) (subst-const c (t-var-v old) new)) (rest loc))
                 (cons
-                  (eqc new old)
+                  (eqc old new)
                   (map (λ (c) (subst-const c (t-var-v old) new)) sub))))]
           (cond
             [(and (t-var? lhs) (t-var? rhs)) (eq? (t-var-v lhs) (t-var-v rhs))
@@ -643,6 +643,10 @@
               (unify-subst lhs rhs)]
             [(t-var? rhs)
               (unify-subst rhs lhs)]
+            [(and (t-num? lhs) (t-num? rhs))
+              (unify (rest loc) sub)]
+            [(and (t-bool? lhs) (t-bool? rhs))
+              (unify (rest loc) sub)]
             [(and (t-list? lhs) (t-list? rhs)) 
               (unify
                 (list* (eqc (t-list-elem lhs) (t-list-elem rhs)) loc)
@@ -666,14 +670,13 @@
 ;; Contract: (infer-type e) -> Type?
 ;;           e : Expr?
 (define (infer-type e)
-  (findf (λ (c) (eq? e (eqc-lhs c))) (unify (generate-constraints 'root e))))
+  (eqc-rhs
+    (findf
+      (λ (c) (eq? 'root (t-var-v (eqc-lhs c))))
+      (unify (generate-constraints 'root e)))))
 
 ;; TESTS FOR INFERRING TYPES
 (define (run sexp)
   (infer-type (parse sexp)))
 
 (run '(+ 1 1))
-
-
-
-
