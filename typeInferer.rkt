@@ -281,19 +281,22 @@
     [iszero (e1) (iszero (alpha-vary e1 h-map))]
     [bif (e1 e2 e3) (bif (alpha-vary e1 h-map) (alpha-vary e2 h-map) (alpha-vary e3 h-map))]
     [with (bound-id bound-body body) 
-          (local ((define newSym (gensym bound-id)))
-          (with 
-           newSym 
-           (alpha-vary bound-body (hash-set h-map bound-id newSym))
-           (alpha-vary body (hash-set h-map bound-id newSym))))]
+      (local ((define newSym (gensym bound-id)))
+        (with
+          newSym 
+          (alpha-vary bound-body (hash-set h-map bound-id newSym))
+          (alpha-vary body (hash-set h-map bound-id newSym))))]
     [rec-with (bound-id bound-body body) 
-              (local ((define newSym (gensym bound-id)))
-                (rec-with 
-                 newSym 
-                 (alpha-vary bound-body (hash-set h-map bound-id newSym))
-                 (alpha-vary body (hash-set h-map bound-id newSym))))]
-    [fun (arg-id body) 
-         (fun (alpha-vary arg-id h-map) (alpha-vary body h-map))]
+      (local ((define newSym (gensym bound-id)))
+        (rec-with 
+          newSym 
+          (alpha-vary bound-body h-map)
+          (alpha-vary body (hash-set h-map bound-id newSym))))]
+    [fun (arg-id body)
+      (local ((define newSym (gensym arg-id)))
+        (fun
+          (alpha-vary arg-id h-map)
+          (alpha-vary body (hash-set h-map arg-id newSym))))]
     [app (fun-expr arg-expr) (app (alpha-vary fun-expr h-map) (alpha-vary arg-expr h-map))]
     [tempty () e]
     [tcons (first rest) (tcons (alpha-vary first h-map) (alpha-vary rest h-map))]
