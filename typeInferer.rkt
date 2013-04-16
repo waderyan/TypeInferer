@@ -660,7 +660,9 @@
                   (eqc (t-fun-result lhs) (t-fun-result rhs))
                   loc
                 sub))]
-            [else (error "Inconsistent types: ~a" (first loc))]))])))
+            [else
+               (error "Inconsistent types: ~a and ~a"
+                 (eqc-lhs (first loc)) (eqc-rhs (first loc)))]))])))
 
 
 ;; TESTS FOR UNIFICATION
@@ -681,4 +683,19 @@
 (define (run sexp)
   (infer-type (parse sexp)))
 
-(run '(+ 1 1))
+(define (tt sexp type)
+  (test ((type=? (run sexp)) type) #t))
+(define (tt/exn sexp)
+  (test/exn (run sexp) ""))
+
+;;num
+(tt '1 (t-num))
+  
+;;bool
+
+
+(tt 'true (t-bool))
+(tt 'false (t-bool))
+(tt 'tempty (t-list (t-var 'a)))
+(tt 'tempty (t-list (t-var 'a)))
+
