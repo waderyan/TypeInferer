@@ -407,9 +407,10 @@
          (local ((define nm-arg-id (gensym))
                  (define nm-body (gensym)))
            (append
-            (generate-constraints nm-arg-id arg-id)
             (generate-constraints nm-body body)
-            (list (eqc (t-var e-id) (t-fun (t-var nm-arg-id) (t-var nm-body))))))]
+            (list
+              (eqc (t-var e-id) (t-var arg-id))
+              (eqc (t-var e-id) (t-fun (t-var nm-arg-id) (t-var nm-body))))))]
     [app (fun-expr arg-expr) 
          (local ((define nm-fun-expr (gensym))
                  (define nm-arg-expr (gensym)))
