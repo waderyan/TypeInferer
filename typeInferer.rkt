@@ -660,7 +660,7 @@
               (unify
                 (list* (eqc (t-list-elem lhs) (t-list-elem rhs)) (rest loc))
                 sub)]
-            [(and (t-fun? lhs) (t-fun? rhs)) 
+            [(and (t-fun? lhs) (t-fun? rhs))
               (unify
                 (list*
                   (eqc (t-fun-arg lhs) (t-fun-arg rhs))
@@ -724,12 +724,18 @@
 ;;iszero
 (test (type-is '(iszero 1) (t-bool)) #t)
 (test (type-is '(iszero (tfirst tempty)) (t-bool)) #t)
-(test (type-is '(iszero (tfirst (tcons 1 empty))) (t-bool)) #t)
+(test (type-is '(iszero (tfirst (tcons 1 tempty))) (t-bool)) #t)
 (test (type-is '(iszero ((fun (x) 0) true)) (t-bool)) #t) 
 (test/exn (run '(iszero true)) "")
 (test/exn (run '(iszero false)) "")
 (test/exn (run '(iszero (tcons 1 1))) "")
 (test/exn (run '(iszero (fun (x) 0))) "")
 
+;;fun
+(test (type-is '(fun (x) 0) (fun (t-var 'a) (t-num))) #t)
+(test (type-is
+  '(fun (x) ((fun (x) (+ x 1)) (bif x 1 0)))
+  (t-fun (t-bool) (t-num))) #t)
+
 ;;EXTRA CREDIT
-(test (type-is '(fun (x) (first tempty)) (t-fun (t-var 'a) (t-var 'b))) #t)
+(test (type-is '(fun (x) (tfirst tempty)) (t-fun (t-var 'a) (t-var 'b))) #t)
