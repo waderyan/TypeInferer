@@ -274,7 +274,7 @@
 (define (alpha-vary e [h-map (make-immutable-hasheq)])
   (type-case Expr e
    [num (n) e]
-    [id (v) (id (hash-ref h-map v (error "alpha-vary: unbound id")))]
+    [id (v) (id (hash-ref h-map v (λ () (error "alpha-vary: unbound id"))))]
     [bool (b) e]
     [bin-num-op (op left right) 
                 (bin-num-op op (alpha-vary left h-map)(alpha-vary right h-map))]
