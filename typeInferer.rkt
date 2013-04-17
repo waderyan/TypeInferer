@@ -685,7 +685,7 @@
     (findf
       (λ (c) (eq? 'root (t-var-v (eqc-lhs c))))
       (unify (generate-constraints 'root e)))))
-
+ 
 ;; TESTS FOR INFERRING TYPES
 (define (run sexp)
   (infer-type (parse sexp)))
@@ -695,6 +695,9 @@
 
 ;;num
 (test (type-is '1 (t-num)) #t)
+(test (type-is '1000000 (t-num)) #t)
+(test (type-is '-1 (t-num)) #t)
+(test (type-is '-1000000 (t-num)) #t)
   
 ;;true
 (test (type-is 'true (t-bool)) #t)
@@ -704,24 +707,37 @@
 
 ;;plus
 (test (type-is '(+ 1 1) (t-num)) #t)
+(test (type-is '(+ (+ 1 1) 1) (t-num)) #t)
+(test (type-is '(+ 1 (+ 1 1)) (t-num)) #t)
 (test/exn (run '(+ 0 true)) "")
+(test/exn (run '(+ false 0)) "")
 (test/exn (run '(+ tempty 0)) "")
+(test/exn (run '(+ 0 tempty)) "")
 (test/exn (run '(+ (fun (a) true) 0)) "")
 
 ;;minus
 (test (type-is '(- 1 1) (t-num)) #t)
+(test (type-is '(- (+ 1 1) 1) (t-num)) #t)
+(test (type-is '(- 1 (+ 1 1)) (t-num)) #t)
 (test/exn (run '(- 0 true)) "")
+(test/exn (run '(- false 0)) "")
 (test/exn (run '(- tempty 0)) "")
+(test/exn (run '(- 0 tempty)) "")
 (test/exn (run '(- (fun (a) true) 0)) "")
 
 ;;multiply
 (test (type-is '(* 1 1) (t-num)) #t)
+(test (type-is '(* (+ 1 1) 1) (t-num)) #t)
+(test (type-is '(* 1 (+ 1 1)) (t-num)) #t)
 (test/exn (run '(* 0 true)) "")
+(test/exn (run '(* false 0)) "")
 (test/exn (run '(* tempty 0)) "")
+(test/exn (run '(* 0 tempty)) "")
 (test/exn (run '(* (fun (a) true) 0)) "")
 
 ;;iszero
 (test (type-is '(iszero 1) (t-bool)) #t)
+(test (type-is '(iszero 0) (t-bool)) #t)
 (test (type-is '(iszero (tfirst tempty)) (t-bool)) #t)
 (test (type-is '(iszero (tfirst (tcons 1 empty))) (t-bool)) #t)
 (test (type-is '(iszero ((fun (x) 0) true)) (t-bool)) #t) 
@@ -729,3 +745,107 @@
 (test/exn (run '(iszero false)) "")
 (test/exn (run '(iszero (tcons 1 1))) "")
 (test/exn (run '(iszero (fun (x) 0))) "")
+
+;; bif
+(test (type-is '(bif true 1 1) (t-num)) #t)
+(test/exn (run '(bif true 1 true)) "")
+(test/exn (run '(bif true true 1)) "")
+(test/exn (run '(bif 1 1 1)) "")
+(test (type-is '(bif (bif true true false) 1 1) (t-num)) #t)
+(test (type-is '(bif true (bif true 1 1) 1) (t-num)) #t)
+(test (type-is '(bif true 1 (bif true 1 1)) (t-num)) #t)
+(test (run '(bif true (+ 1 1) (+ 1 1))) (t-num))
+(test (run '(bif true true true)) (t-bool))
+(test (run '(bif true true true)) (t-bool))
+
+;; tempty & tcons
+(test (type-is 'tempty (t-list (t-var (gensym)))) #t)
+(test (type-is '(tcons 1 nempty) (t-list (t-num))) #t)
+(test (type-is '(tcons true nempty) (t-list (t-bool))) #t)
+(test (type-is '(tcons (fun (x) 1) nempty) 
+               (t-list (t-fun (t-var (gensym)) (t-num)))) #t)
+(test (type-is '(tcons (fun (x) true) nempty) 
+               (t-list (t-fun (t-var (gensym)) (t-bool)))) #t)
+(test (type-is '(tcons 1 (tcons 1 tempty)) (t-list (t-num))) #t)
+(test (type-is '(tcons (tcons 1 tempty) tempty) (t-list (t-list (t-num)))) #t)
+(test (type-is '(tcons (+ 1 1) tempty) (t-list (t-num))) #t)
+(test (type-is '(tcons ((fun (x) x) 1) nempty) (t-list (t-var (gensym)))) #t)
+(test (type-is '(tcons true tempty) (t-list (t-bool))) #t)
+
+(test/exn (run '(tcons 1 1)) "")
+(test/exn (run '(tcons tempty 1)) "")
+(test/exn (run '(tcons 1 true)) "")
+
+;; tempty?
+(test (run '(tempty? tempty)) (t-bool))
+(test (run '(tempty? (tcons 1 tempty))) (t-bool))
+
+;; tfirst & trest
+;(test (run '(tfirst tempty)) (t-num))
+;(test (run '(tfirst (tcons 1 tempty))) (t-num))
+(test/exn (run '(tfirst 1)) "")
+(test/exn (run '(tfirst true)) "")
+(test/exn (run '(tfirst false)) "")
+(test/exn (run '(tfirst (+ 1 1))) "")
+(test (type-is '(trest tempty) (t-list(t-var (gensym)))) #t)
+(test (type-is '(trest (tcons 1 tempty)) (t-list (t-num))) #t)
+(test/exn (run '(trest 1)) "")
+(test/exn (run '(trest true)) "")
+(test/exn (run '(trest false)) "")
+(test/exn (run '(trest (+ 1 1))) "")
+
+;; fun & app
+(test/exn (run '(fun (x) t x)) "")
+(test (type-is '(fun (y)  y) (t-fun (t-var (gensym)) (t-var (gensym)))) #t)
+
+(test (type-is '(fun (x) (+ x 1)) (t-fun (t-var (gensym)) (t-num))) #t)
+(test (type-is '(+ 1 ((fun (x) 1) 1)) (t-num)) #t)
+(test/exn (run '((fun (x) tempty) 1)) "")
+(test/exn (run '((fun (x) tempty) 1)) "")
+(test (run '((fun (x) tempty) true)) (t-list))
+
+;; with
+(test (run '(with (x true) (bif x false x))) (t-bool))
+(test (run '(with (x 1) (+ 1 x))) (t-num))
+(test (run '(with (x (fun (y : number) : number (* y y))) (x 2))) (t-num))
+(test (run '(with (x 1) (with (y 2) (+ x y)))) (t-num))
+(test/exn (run '(with (x 1) (with (y true) (+ x y)))) "")
+(test/exn (run '(with (x true) (with (y 1) (+ x y)))) "")
+(test/exn (run '(with (x true) (with (y 1) (bif x y x)))) "")
+(test (run '(with (x true) (with (y 1) (bif x y (+ y 1))))) (t-num))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
