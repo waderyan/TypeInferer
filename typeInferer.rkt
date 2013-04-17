@@ -295,7 +295,7 @@
     [fun (arg-id body)
       (local ((define newSym (gensym arg-id)))
         (fun
-          (alpha-vary arg-id h-map)
+          newSym
           (alpha-vary body (hash-set h-map arg-id newSym))))]
     [app (fun-expr arg-expr) (app (alpha-vary fun-expr h-map) (alpha-vary arg-expr h-map))]
     [tempty () e]
@@ -646,7 +646,7 @@
                   (eqc old new)
                   (map (λ (c) (subst-const c (t-var-v old) new)) sub))))]
           (cond
-            [(and (t-var? lhs) (t-var? rhs)) (eq? (t-var-v lhs) (t-var-v rhs))
+            [(and (t-var? lhs) (t-var? rhs) (eq? (t-var-v lhs) (t-var-v rhs)))
               (unify (rest loc) sub)]
             [(t-var? lhs)
               (unify-subst lhs rhs)]
@@ -682,10 +682,11 @@
 ;;           e : Expr?
 (define (infer-type e)
   (eqc-rhs
-    (findf
-      (λ (c) (eq? 'root (t-var-v (eqc-lhs c))))
-      (unify (generate-constraints 'root e)))))
- 
+    (local ([define root-id (gensym)])
+      (findf
+        (λ (c) (eq? root-id (t-var-v (eqc-lhs c))))
+        (unify (generate-constraints root-id (alpha-vary e)))))))
+
 ;; TESTS FOR INFERRING TYPES
 (define (run sexp)
   (infer-type (parse sexp)))
@@ -815,6 +816,9 @@
 (test (run '(with (x true) (with (y 1) (bif x y (+ y 1))))) (t-num))
 
 
+
+;;EXTRA CREDIT
+(test (type-is '(fun (x) (first tempty)) (t-fun (t-var 'a) (t-var 'b))) #t)
 
 
 

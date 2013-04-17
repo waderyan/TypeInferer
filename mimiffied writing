@@ -1,0 +1,664 @@
+;; Wade Anderson
+;; Paul Draper
+Type Inference Writing Assignment
+
+---------------------------- QUESTION ---------------------------
+
+3.20.1 Constraint Generation and Satisfaction
+
+Consider the program:
+(+ 1 (first (cons true empty)))
+
+This program has a type error.
+Generate constraints for this program. Isolate the smallest set of these 
+constraints that, solved together, identify the type error.
+
+Feel free to label the sub-expressions above with superscripts for use 
+when writing and solving constraints.
+---------------------------- ANSWER ---------------------------
+
+(+ 1 (first (cons true empty)))
+
+Labels
+t1 = (+ e1 e2)
+t2 = 1
+t3 = (first e1)
+t4 = (cons e1 e2)
+t5 = true
+t6 = empty
+
+constraints
+t1 = number
+t2 = number
+t3 = number
+t4 = list(num)
+t4 = list(t5)
+t5 = bool
+t6 = list(t5)
+
+Smallest set of constraints to find the type error:
+
+t4 = list(num)
+t4 = list(t5)
+t5 = bool
+
+Putting these constraints through the unification algorithm will 
+yield a type error. 
+This is because t4 requires a list of numbers but the application of 
+type t5 to the second type constraint on t4 will lead to a contradiction. 
+
+
+---------------------------- QUESTION ---------------------------
+Consider the following typed expression:
+{fun {f : B1}  : B2
+  {fun {x : B3}  : B4
+    {fun {y : B5}  : B6
+      {cons x {f {f y}}}}}}
+
+Show the type inference process.
+---------------------------- ANSWER ---------------------------
+
+[1]{fun {f : B1}  : B2
+  [2]{fun {x : B3}  : B4
+   [3] {fun {y : B5}  : B6
+      [4]{cons x {f {f y}}}}}}
+
+Constraints
+[1] = f -> [2]
+[1] = B1 -> B2
+[2] = x -> [3]
+[2] = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+f = [(f y)] -> [(f (f y))]
+f = y -> [(f y)]
+[(f (f y))] = list x
+
+
+INITIALIZATION
+
+stack
+-----
+[1] = f -> [2]
+[1] = B1 -> B2
+[2] = x -> [3]
+[2] = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+f = [(f y)] -> [(f (f y))]
+f = y -> [(f y)]
+[(f (f y))] = list x
+
+
+sub
+----
+EMPTY
+
+
+--------------------------------------------------------------------------
+ROUND 1 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+f -> [2] = B1 -> B2
+[2] = x -> [3]
+[2] = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+f = [(f y)] -> [(f (f y))]
+f = y -> [(f y)]
+[(f (f y))] = list x
+
+sub
+----
+[1] = f -> [2]
+
+
+--------------------------------------------------------------------------
+ROUND 2 -- unification rule 4
+--------------------------------------------------------------------------
+
+stack
+-----
+f = B1
+[2] = B2
+[2] = x -> [3]
+[2] = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+f = [(f y)] -> [(f (f y))]
+f = y -> [(f y)]
+[(f (f y))] = list x
+
+sub
+----
+[1] = f -> [2]
+
+
+--------------------------------------------------------------------------
+ROUND 3 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+[2] = B2
+[2] = x -> [3]
+[2] = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list x
+
+sub
+----
+[1] = B1 -> [2]
+f = B1
+
+
+--------------------------------------------------------------------------
+ROUND 4 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+B2 = x -> [3]
+B2 = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list x
+
+sub
+----
+[1] = B1 -> B2
+f = B1
+[2] = B2
+
+
+--------------------------------------------------------------------------
+ROUND 5 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+x -> [3] = B3 -> B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list x
+
+sub
+----
+[1] = B1 -> x -> [3]
+f = B1
+[2] = x -> [3]
+B2 = x -> [3]
+
+
+--------------------------------------------------------------------------
+ROUND 6 -- unification rule 4
+-------------------------------------------------------------------------
+
+stack
+-----
+x = B3
+[3] = B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list x
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list x
+
+sub
+----
+[1] = B1 -> x -> [3]
+f = B1
+[2] = x -> [3]
+B2 = x -> [3]
+
+--------------------------------------------------------------------------
+ROUND 7 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+[3] = B4
+[3] = y -> [4]
+[3] = B5 -> B6
+[4] = list B3
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> [3]
+f = B1
+[2] = B3 -> [3]
+B2 = B3 -> [3]
+x = B3
+
+--------------------------------------------------------------------------
+ROUND 7 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+B4 = y -> [4]
+B4 = B5 -> B6
+[4] = list B3
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> [3]
+f = B1
+[2] = B3 -> [3]
+B2 = B3 -> [3]
+x = B3
+[3] = B4
+
+--------------------------------------------------------------------------
+ROUND 8 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+y -> [4] = B5 -> B6
+[4] = list B3
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> y -> [4]
+f = B1
+[2] = B3 -> y -> [4]
+B2 = B3 -> y -> [4]
+x = B3
+[3] = y -> [4]
+B4 = y -> [4]
+
+--------------------------------------------------------------------------
+ROUND 9 -- unification rule 4
+--------------------------------------------------------------------------
+
+stack
+-----
+y = B5
+[4] = B6
+[4] = list B3
+B1 = [(f y)] -> [(f (f y))]
+B1 = y -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> y -> [4]
+f = B1
+[2] = B3 -> y -> [4]
+B2 = B3 -> y -> [4]
+x = B3
+[3] = y -> [4]
+B4 = y -> [4]
+
+
+--------------------------------------------------------------------------
+ROUND 10 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+[4] = B6
+[4] = list B3
+B1 = [(f y)] -> [(f (f y))]
+B1 = B5 -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> B5 -> [4]
+f = B1
+[2] = B3 -> B5 -> [4]
+B2 = B3 -> B5 -> [4]
+x = B3
+[3] = B5 -> [4]
+B4 = B5 -> [4]
+y = B5
+
+
+--------------------------------------------------------------------------
+ROUND 11 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+B6 = list B3
+B1 = [(f y)] -> [(f (f y))]
+B1 = B5 -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> B5 -> B6
+f = B1
+[2] = B3 -> B5 -> B6
+B2 = B3 -> B5 -> B6
+x = B3
+[3] = B5 -> B6
+B4 = B5 -> B6
+y = B5
+[4] = B6
+
+
+--------------------------------------------------------------------------
+ROUND 12 -- unification rule 2
+--------------------------------------------------------------------------
+
+
+stack
+-----
+B1 = [(f y)] -> [(f (f y))]
+B1 = B5 -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B1 -> B3 -> B5 -> list B3
+f = B1
+[2] = B3 -> B5 -> list B3
+B2 = B3 -> B5 -> list B3
+x = B3
+[3] = B5 -> list B3
+B4 = B5 -> list B3
+y = B5
+[4] = list B3
+B6 = list B3
+
+
+--------------------------------------------------------------------------
+ROUND 13 -- unification rule 2
+--------------------------------------------------------------------------
+
+
+stack
+-----
+[(f y)] -> [(f (f y))] = B5 -> [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = [(f y)] -> [(f (f y))] -> B3 -> B5 -> list B3
+f = [(f y)] -> [(f (f y))]
+[2] = B3 -> B5 -> list B3
+B2 = B3 -> B5 -> list B3
+x = B3
+[3] = B5 -> list B3
+B4 = B5 -> list B3
+y = B5
+[4] = list B3
+B6 = list B3
+B1 = [(f y)] -> [(f (f y))]
+
+--------------------------------------------------------------------------
+ROUND 14 -- unification rule 4
+--------------------------------------------------------------------------
+
+stack
+-----
+[(f y)] = B5
+[(f (f y))] = [(f y)]
+[(f (f y))] = list B3
+
+sub
+----
+[1] = [(f y)] -> [(f (f y))] -> B3 -> B5 -> list B3
+f = [(f y)] -> [(f (f y))]
+[2] = B3 -> B5 -> list B3
+B2 = B3 -> B5 -> list B3
+x = B3
+[3] = B5 -> list B3
+B4 = B5 -> list B3
+y = B5
+[4] = list B3
+B6 = list B3
+B1 = [(f y)] -> [(f (f y))]
+
+--------------------------------------------------------------------------
+ROUND 15 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+[(f (f y))] = B5
+[(f (f y))] = list B3
+
+sub
+----
+[1] = B5 -> [(f (f y))] -> B3 -> B5 -> list B3
+f = B5 -> [(f (f y))]
+[2] = B3 -> B5 -> list B3
+B2 = B3 -> B5 -> list B3
+x = B3
+[3] = B5 -> list B3
+B4 = B5 -> list B3
+y = B5
+[4] = list B3
+B6 = list B3
+B1 = B5 -> [(f (f y))]
+[(f y)] = B5
+
+--------------------------------------------------------------------------
+ROUND 16 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+B5 = list B3
+
+sub
+----
+[1] = B5 -> B5 -> B3 -> B5 -> list B3
+f = B5 -> B5
+[2] = B3 -> B5 -> list B3
+B2 = B3 -> B5 -> list B3
+x = B3
+[3] = B5 -> list B3
+B4 = B5 -> list B3
+y = B5
+[4] = list B3
+B6 = list B3
+B1 = B5 -> B5
+[(f y)] = B5
+[(f (f y))] = B5
+
+--------------------------------------------------------------------------
+ROUND 17 -- unification rule 2
+--------------------------------------------------------------------------
+
+stack
+-----
+empty
+
+sub
+----
+[1] = list B3 -> list B3 -> B3 -> list B3 -> list B3
+f = list B3 -> list B3
+[2] = B3 -> list B3 -> list B3
+B2 = B3 -> list B3 -> list B3
+x = B3
+[3] = list B3 -> list B3
+B4 = list B3 -> list B3
+y = list B3
+[4] = list B3
+B6 = list B3
+B1 = list B3 -> list B3
+[(f y)] = list B3
+[(f (f y))] = list B3
+B5 = list B3
+
+
+--------------------------------------------------------------------------
+RESULTS
+--------------------------------------------------------------------------
+B1 = listB3 -> listB3
+B2 = B3 -> list B3 -> list B3
+B3 = ??
+B4 = list B3 -> list B3
+B5 = list B3
+B6 = list B3
+
+
+This function is polymorphic. Similar to what we read about in the book when
+finding the length of a list. The function didnt' need to know what type 
+the list was. Our function does not need to know the type of B3 to work. 
+
+
+
+---------------------------- QUESTION ---------------------------
+Application. 
+
+Type inference is gaining popularity because of its programming ease 
+of use. Many languages use a type inference system (Scala, Haskell, 
+Racket, and C# and Java to some extent). The debate 
+rages on between programmers for and against type inference. 
+Understanding the advantages and disadvantages is valuable 
+to software engineers as they develop and deliver quality software. 
+
+C# is an interesting language to discuss type inference because it 
+supports type inference and explicit type checking. With the use 
+of the var keyword any C# data type can be inferred. 
+Here are some advantages of such a system.
+
+1) Avoid redundant coding such as this: 
+    List<List<List<String>>> myList = new List<List<List<String>>>();
+    Clearly this line could easily be written with the var keyword 
+    and not lose any readability.
+    var myList = new List<List<List<String>>>(); 
+    (Arguably the readability is enhanced by such a use). 
+2) Use with anonymous data types.
+    var v = new {Amount = 108, Message = "Hello");
+    In this situation type inference is necessary because the 
+    anonymous type does not have a  name. 
+3) Use with Linq (Object relational mapping construct).
+    var productQuery = 
+    from prod in products select new {prod.Color, prod.Price};
+4) Use when types are easy to see, such as in looping constructs
+    var lst = new List<String>();
+    ... add items to list ...
+    foreach (var item in lst) {
+        .. do something to each item. 
+    }
+
+    or for more traditional for statements
+    for(var i = 0; i < size; i++) {
+
+    }
+
+    Now in this case the var could be seen as unnecessary. int is the 
+    same number of letters as var so there is really no added benefit 
+    to using var. 
+
+C++ has introduced a very similar construct: auto.
+
+5) Vibes with the principle of coding to abstractions rather than 
+concretions
+    Good programmers learn that is much more valuable to program to 
+    abstractions rather than concretions. It can be argued that using 
+    a language that supports type inference is a way to program in 
+    such a way. Proponents of the use of the var keyword will argue 
+    that if the type is not easily inferred by the design then the 
+    design is flawed. The var keyword is not the problem is the mess 
+    of variables that cause the confusion about what type var is. 
+    With this argument type inference can lead to better designed code. 
+
+Java supports some type inference for geneics. One example of this 
+is seen below.
+
+List<Integer> f() {
+    return Collections.emptyList();
+}
+
+The emptyList() method is a generic method. Although no type parameters 
+are given, Java can infer from context that 
+Collections.<Integer>emptyList() is being called.
+
+In Java 7 and later, additional type inference for generic is possible. 
+For example,
+
+    List<Set<String>> list = new ArrayList<>();
+
+Here the type is left out of the second <> because the Java compiler 
+can infer the type as ArrayList<Set<String>>.
+
+Scala uses many type inference constructs. Variables and return values of 
+methods are inferred by the built in type inference mechanisms. 
+See the example below 
+(take from www.scala-lang.org/node/127):
+
+object InferenceTest1 extends Application {
+    val x = 1 + 2 * 3           // infers type of x is Int
+    val y = x.toString()        // infers type of y is String
+    def succ(x: Int) = x + 1    // method is inferred to return Int values;
+}
+
+It is also important to understand the limitations of languages type 
+inference systems. For example in Scala recursive functions will fail 
+without specifying the result type: 
+
+    object InferenceTest2 {
+        def fac(n: Int) = if (n == 0) 1 else n * fac(n - 1)
+    }
+
+Scala (same as the Java example above) will infer types for generic 
+classes and polymorphic methods. 
+
+    case class MyPair[A, B](x :A, y: B);
+    object InferenceTest3 extends Application {
+        def id[T][x: T] = x
+        val p = new MyPair(1, "scala")      
+        // type is inferred to be A - Int, B - String
+        val q = id(1)                       
+        // type inferred int
+    }
+
+Understanding type inference in Scala is important to avoid bugs. Here is 
+an example of an erroneous program. 
+
+    object InferenceTest4 {
+        var obj = null;
+        obj = new Object();
+    }
+
+Because obj is initially inferred to be of type Null then that is the only 
+value it can possibly hold, obj cannot be changed to type Object. 
+
+As shown by these numerous examples type inference is vital for programmers 
+to understand. Type checking and type inference are very important tools 
+that 
+language designers have given programmers. Understanding how the language 
+you are using type checks (or doesn't check) is valuable for finding and 
+avoiding bugs, maximizing performance, and enhancing readability. 
+
+
+
+
+
+
+
+
