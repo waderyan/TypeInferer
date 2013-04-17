@@ -729,3 +729,6 @@
 (test/exn (run '(iszero false)) "")
 (test/exn (run '(iszero (tcons 1 1))) "")
 (test/exn (run '(iszero (fun (x) 0))) "")
+
+;;EXTRA CREDIT
+(test (type-is '(fun (x) (first tempty)) (t-fun (t-var 'a) (t-var 'b))) #t)
