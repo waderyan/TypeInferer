@@ -963,6 +963,7 @@
 
 ;; tempty & tcons
 (test (type-is 'tempty (t-list (t-var (gensym)))) #t)
+
 (test (type-is '(tcons 1 tempty) (t-list (t-num))) #t)
 (test (type-is '(tcons true tempty) (t-list (t-bool))) #t)
 (test (type-is '(tcons (fun (x) 1) tempty) 
@@ -982,16 +983,25 @@
 ;; tempty?
 (test (run '(tempty? tempty)) (t-bool))
 (test (run '(tempty? (tcons 1 tempty))) (t-bool))
+(test/exn (run '(tempty? 0)) "")
+(test/exn (run '(tempty? true)) "")
+(test/exn (run '(tempty? (fun (x) 1))) "")
 
 ;; tfirst & trest
 (test (type-is '(tfirst tempty) (t-var (gensym))) #t)
 (test (run '(tfirst (tcons 1 tempty))) (t-num))
+(test (type-is '(tfirst (tcons true tempty)) (t-bool)) #t)
+(test (type-is '(tfirst (tcons (fun (x) 1) tempty)) 
+      (t-fun (t-var (gensym)) (t-num))) #t)
 (test/exn (run '(tfirst 1)) "")
 (test/exn (run '(tfirst true)) "")
 (test/exn (run '(tfirst false)) "")
 (test/exn (run '(tfirst (+ 1 1))) "")
+
 (test (type-is '(trest tempty) (t-list(t-var (gensym)))) #t)
 (test (type-is '(trest (tcons 1 tempty)) (t-list (t-num))) #t)
+(test (type-is '(trest (tcons true tempty)) (t-list (t-bool))) #t)
+(test (type-is '(trest (tcons true tempty)) (t-list (t-bool))) #t)
 (test/exn (run '(trest 1)) "")
 (test/exn (run '(trest true)) "")
 (test/exn (run '(trest false)) "")
@@ -1019,7 +1029,6 @@
 (test (run '(with (x true) (with (y 1) (bif x y (+ y 1))))) (t-num))
 
 
-
 ;; rec-with
 (test (type-is '(rec (x 1) x) (t-var (gensym))) #t)
 (test (type-is '(rec (x 1) 1) (t-num)) #t)
@@ -1031,7 +1040,6 @@
 (test (type-is '(rec (x true) (with (y 1) (+ x y))) (t-num)) #t)
 (test (type-is '(rec (x true) (with (y 1) (bif x y x))) (t-bool)) #t)
 (test (run '(rec (x true) (with (y 1) (bif x y (+ y 1))))) (t-num))
-
 
 
 ;; with errors
