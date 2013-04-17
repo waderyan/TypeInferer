@@ -732,7 +732,7 @@
 (test/exn (run '(iszero (fun (x) 0))) "")
 
 ;;fun
-(test (type-is '(fun (x) 0) (t-fun (t-var 'a)) (t-num)) #t)
+(test (type-is '(fun (x) 0) (t-fun (t-var 'a) (t-num))) #t)
 (test (type-is
   '(fun (x) ((fun (x) (+ x 1)) (bif x 1 0)))
   (t-fun (t-bool) (t-num))) #t)
