@@ -412,15 +412,18 @@
            (append
             (generate-constraints nm-body body)
             (list
-              (eqc (t-var e-id) (t-var arg-id))
+              (eqc (t-var arg-id) (t-var nm-arg-id))
               (eqc (t-var e-id) (t-fun (t-var nm-arg-id) (t-var nm-body))))))]
     [app (fun-expr arg-expr) 
          (local ((define nm-fun-expr (gensym))
-                 (define nm-arg-expr (gensym)))
+                 (define nm-arg-expr (gensym))
+                 (define nm-result (gensym)))
            (append
             (generate-constraints nm-fun-expr fun-expr)
             (generate-constraints nm-arg-expr arg-expr)
-            (list (eqc (t-var e-id) (t-fun (t-var nm-arg-expr) (t-var nm-fun-expr))))))]
+            (list
+              (eqc (t-var e-id) (t-var nm-result))
+              (eqc (t-var nm-fun-expr) (t-fun (t-var nm-arg-expr) (t-var nm-result))))))]
     [tempty ()
          (local ((define nm-elem (gensym)))
            (list (eqc (t-var e-id) (t-list (t-var nm-elem)))))]
@@ -442,8 +445,8 @@
             (local ((define nm-e1 (gensym)) (define nm-elem (gensym)))
                 (append
                  (generate-constraints nm-e1 e1)
-                 (list (eqc (t-var e-id) (t-var nm-elem)))
-                       (eqc (t-var nm-e1) (t-list (t-var nm-elem)))))]
+                 (list (eqc (t-var e-id) (t-var nm-elem))
+                       (eqc (t-var nm-e1) (t-list (t-var nm-elem))))))]
     [trest (e1) 
            (local ((define nm-e1 (gensym)) (define nm-elem (gensym)))
                 (append
