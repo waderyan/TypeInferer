@@ -708,7 +708,24 @@
 (test/exn (run '(+ tempty 0)) "")
 (test/exn (run '(+ (fun (a) true) 0)) "")
 
-(run '(fun (a) true))
+;;minus
+(test (type-is '(- 1 1) (t-num)) #t)
+(test/exn (run '(- 0 true)) "")
+(test/exn (run '(- tempty 0)) "")
+(test/exn (run '(- (fun (a) true) 0)) "")
 
+;;multiply
+(test (type-is '(* 1 1) (t-num)) #t)
+(test/exn (run '(* 0 true)) "")
+(test/exn (run '(* tempty 0)) "")
+(test/exn (run '(* (fun (a) true) 0)) "")
 
-
+;;iszero
+(test (type-is '(iszero 1) (t-bool)) #t)
+(test (type-is '(iszero (tfirst tempty)) (t-bool)) #t)
+(test (type-is '(iszero (tfirst (tcons 1 empty))) (t-bool)) #t)
+(test (type-is '(iszero ((fun (x) 0) true)) (t-bool)) #t) 
+(test/exn (run '(iszero true)) "")
+(test/exn (run '(iszero false)) "")
+(test/exn (run '(iszero (tcons 1 1))) "")
+(test/exn (run '(iszero (fun (x) 0))) "")
