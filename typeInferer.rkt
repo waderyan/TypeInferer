@@ -284,13 +284,13 @@
       (local ((define newSym (gensym bound-id)))
         (with
           newSym 
-          (alpha-vary bound-body (hash-set h-map bound-id newSym))
+          (alpha-vary bound-body h-map)
           (alpha-vary body (hash-set h-map bound-id newSym))))]
     [rec-with (bound-id bound-body body) 
       (local ((define newSym (gensym bound-id)))
         (rec-with 
           newSym 
-          (alpha-vary bound-body h-map)
+          (alpha-vary bound-body (hash-set h-map bound-id newSym))
           (alpha-vary body (hash-set h-map bound-id newSym))))]
     [fun (arg-id body)
       (local ((define newSym (gensym arg-id)))
@@ -322,9 +322,12 @@
 ;; unbound identifier
 (test/exn (alpha-vary (parse 'hi)) "alpha-vary")
 ;; with
-;(test (alpha-vary (parse '(with (id 5) 10))) (with 'id97080 (num 5) (num 10)))
+(alpha-vary (parse '(with (id 5) 10))) ;;output: (with 'id10133 (num 5) (num 10))
+(test/exn (alpha-vary (parse '(with (x x) x))) "alpha-vary")
+(alpha-vary (parse '(with (x 1) (with (x true) 10)))) ;;output: (with 'x10147 (num 1) (with 'x10148 (bool #t) (num 10)))
 ;; rec-with
-;(test (alpha-vary (parse '(rec (id 5) 10)))(rec-with 'id98442 (num 5) (num 10)))
+(alpha-vary (parse '(rec (id 5) 10))) ;;output: (rec-with 'id10149 (num 5) (num 10))
+(alpha-vary (parse '(rec (x (fun (y) x)) x))) ;;output: (rec-with 'x10150 (fun 'y10151 (id 'x10150)) (id 'x10150))
 ;; fun
 
 ;; app
