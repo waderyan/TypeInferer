@@ -323,9 +323,11 @@
     [id (v) (id (hash-ref h-map v (λ () (error "alpha-vary: unbound id"))))]
     [bool (b) e]
     [bin-num-op (op left right) 
-                (bin-num-op op (alpha-vary left h-map)(alpha-vary right h-map))]
+                (bin-num-op op (alpha-vary left h-map)(alpha-vary right 
+                h-map))]
     [iszero (e1) (iszero (alpha-vary e1 h-map))]
-    [bif (e1 e2 e3) (bif (alpha-vary e1 h-map) (alpha-vary e2 h-map) (alpha-vary e3 h-map))]
+    [bif (e1 e2 e3) (bif (alpha-vary e1 h-map) (alpha-vary e2 h-map) 
+    (alpha-vary e3 h-map))]
     [with (bound-id bound-body body) 
       (local ((define newSym (gensym bound-id)))
         (with
@@ -343,9 +345,11 @@
         (fun
           newSym
           (alpha-vary body (hash-set h-map arg-id newSym))))]
-    [app (fun-expr arg-expr) (app (alpha-vary fun-expr h-map) (alpha-vary arg-expr h-map))]
+    [app (fun-expr arg-expr) (app (alpha-vary fun-expr h-map) (alpha-vary
+     arg-expr h-map))]
     [tempty () e]
-    [tcons (first rest) (tcons (alpha-vary first h-map) (alpha-vary rest h-map))]
+    [tcons (first rest) (tcons (alpha-vary first h-map) (alpha-vary rest
+     h-map))]
     [istempty (e1) (istempty (alpha-vary e1 h-map))]
     [tfirst (e1) (tfirst (alpha-vary e1 h-map))]
     [trest (e1) (trest (alpha-vary e1 h-map))]))
@@ -380,11 +384,14 @@
 ;; rec-with
 ;(alpha-vary (parse '(rec (x 1) x)))
 ;       (rec-with 'x114632 (num 1) (id 'x114632))
-;(test (alpha-vary (parse '(rec (id 5) 10)))(rec-with 'id98442 (num 5) (num 10)))
+;(test (alpha-vary (parse '(rec (id 5) 10)))(rec-with 'id98442 (num 5)
+; (num 10)))
 ;(alpha-vary (parse '(rec (x 1) (rec (x x) x))))
-;       (rec-with 'x115115 (num 1) (rec-with 'x115116 (id 'x115115) (id 'x115116)))
+;       (rec-with 'x115115 (num 1) (rec-with 'x115116 (id 'x115115) (id 
+;'x115116)))
 ; (alpha-vary (parse '(rec (x (fun (x) x)) (x 1))))
-;     (rec-with 'x115501 (fun 'x115502 (id 'x115502)) (app (id 'x115501) (num 1)))
+;     (rec-with 'x115501 (fun 'x115502 (id 'x115502)) (app (id 'x115501) 
+;(num 1)))
 ;
 ;; fun
 ;(alpha-vary (parse '(fun (x) x) ))
@@ -488,7 +495,8 @@
             (generate-constraints nm-arg-expr arg-expr)
             (list
               (eqc (t-var e-id) (t-var nm-result))
-              (eqc (t-var nm-fun-expr) (t-fun (t-var nm-arg-expr) (t-var nm-result))))))]
+              (eqc (t-var nm-fun-expr) (t-fun (t-var nm-arg-expr) (t-var
+               nm-result))))))]
     [tempty ()
          (local ((define nm-elem (gensym)))
            (list (eqc (t-var e-id) (t-list (t-var nm-elem)))))]
@@ -523,10 +531,13 @@
 ; num
 (test (generate-constraints 'x (parse '5)) (list (eqc (t-var 'x) (t-num))))
 ; id
-(test (generate-constraints 'x (parse 'hi)) (list (eqc (t-var 'x) (t-var 'hi))))
+(test (generate-constraints 'x (parse 'hi)) (list (eqc (t-var 'x) (t-var
+ 'hi))))
 ;; bool
-(test (generate-constraints 'x (parse 'true)) (list (eqc (t-var 'x) (t-bool))))
-(test (generate-constraints 'x (parse 'false)) (list (eqc (t-var 'x) (t-bool))))
+(test (generate-constraints 'x (parse 'true)) (list (eqc (t-var 'x) 
+(t-bool))))
+(test (generate-constraints 'x (parse 'false)) (list (eqc (t-var 'x)
+ (t-bool))))
 ;; bin-num-op
 ((constraint-list=? 
  (generate-constraints 'x (parse '(+ 1 2)))) 
@@ -822,7 +833,8 @@
     [t-list (elem)
       (t-list (subst-type elem old-id new-type))]
     [t-fun (arg result)
-      (t-fun (subst-type arg old-id new-type) (subst-type result old-id new-type))]
+      (t-fun (subst-type arg old-id new-type) (subst-type result old-id 
+      new-type))]
     [t-var (v)
       (if (eq? v old-id) new-type t)]
     [else t]))
