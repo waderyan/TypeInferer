@@ -200,6 +200,11 @@
           (id sexp)
           (error "Parse: expected expr syntax"))]))
 
+(define (tp toParse value)
+  (test (parse toParse) value))
+(define (tpe toParse value)
+  (test/exn (parse toParse) value))
+
 ;; PARSER TESTS
 
 ;; num
@@ -247,25 +252,66 @@
 ;; with
 (test (parse '(with (hello 5) hi)) 
       (with 'hello (num 5) (id 'hi)))
+(tp '(with (x 1) x) (with 'x (num 1) (id 'x)))
+(tp '(with (x (+ 1 2)) x) 
+    (with 'x (bin-num-op + (num 1) (num 2)) (id 'x)))
+(tp '(with (x 1) (+ 1 x)) 
+    (with 'x (num 1) (bin-num-op + (num 1) (id 'x))))
+(tp '(with (x ((fun (x) x) true)) x)
+    (with 'x (app (fun 'x (id 'x)) (bool true)) (id 'x)))
 ;; fun
 (test (parse '(fun (hi) 5)) 
       (fun 'hi (num 5)))
 (test (parse '(fun (x) (+ x 5))) 
       (fun 'x (bin-num-op + (id 'x) (num 5))))
+(tp '(fun (x) x) (fun 'x (id 'x)))
+(tp '(fun (x) (fun (y) (+ x y))) 
+    (fun 'x (fun 'y (bin-num-op + (id 'x) (id 'y)))))
 ;; rec 
 (test (parse '(rec (hi 2) 5)) (rec-with 'hi (num 2) (num 5)))
+(tp '(rec (x 1) x) (rec-with 'x (num 1) (id 'x)))
+(tp '(rec (x (+ 1 2)) x) 
+    (rec-with 'x (bin-num-op + (num 1) (num 2)) (id 'x)))
+(tp '(rec (x 1) (+ 1 x)) 
+    (rec-with 'x (num 1) (bin-num-op + (num 1) (id 'x))))
+(tp '(rec (x ((fun (x) x) true)) x)
+    (rec-with 'x (app (fun 'x (id 'x)) (bool true)) (id 'x)))
 ;; app
 (test (parse '(5 5)) (app (num 5) (num 5)))
+(tp '((fun (x) x) 1) (app (fun 'x (id 'x)) (num 1)))
+(tp '((fun (x) (fun (y) (+ x y))) (+ 1 2)) 
+    (app (fun 'x (fun 'y (bin-num-op + (id 'x) (id 'y)))) 
+         (bin-num-op + (num 1) (num 2))))
 ;; tempty
 (test (parse 'tempty) (tempty))
 ;; tcons
 (test (parse '(tcons 5 5)) (tcons (num 5) (num 5)))
+(tp '(tcons 1 tempty) (tcons (num 1) (tempty)))
+(tp '(tcons true tempty) (tcons (bool true) (tempty)))
+(tp '(tcons (+ 1 2) tempty) (tcons (bin-num-op + (num 1) (num 2)) (tempty)))
+(tp '(tcons (fun (x) x) tempty) (tcons (fun 'x (id 'x)) (tempty)))
+(tp '(tcons 1 (tcons 2 tempty)) (tcons (num 1) (tcons (num 2) (tempty))))
+(tp '(tcons 1 (tcons true tempty))
+    (tcons (num 1) (tcons (bool true) (tempty))))
+(tp '(tcons tempty tempty) (tcons (tempty) (tempty)))
 ;; tempty?
 (test (parse '(tempty? 5)) (istempty (num 5)))
 ;; tfirst 
 (test (parse '(tfirst 5)) (tfirst (num 5)))
+(tp '(tfirst (tcons 1 tempty)) (tfirst (tcons (num 1) (tempty))))
+(tp '(tfirst tempty) (tfirst (tempty)))
+(tp '(tfirst (tcons true tempty)) (tfirst (tcons (bool true) (tempty))))
+(tp '(tfirst (tcons false tempty)) (tfirst (tcons (bool false) (tempty))))
 ;; trest
 (test (parse '(trest 5)) (trest (num 5)))
+(tp '(trest (tcons 1 tempty)) (trest (tcons (num 1) (tempty))))
+(tp '(trest tempty) (trest (tempty)))
+(tp '(trest (tcons true tempty)) (trest (tcons (bool true) (tempty))))
+(tp '(trest (tcons false tempty)) (trest (tcons (bool false) (tempty))))
+;; istempty
+(tp '(tempty? tempty) (istempty (tempty)))
+(tp '(tempty? (tcons true tempty)) (istempty (tcons (bool true) (tempty))))
+(tp '(tempty? (tcons false tempty)) (istempty (tcons (bool false) (tempty))))
 
 ;; 3.19.3 Alpha Renaming
 ;; Purpose: Renames all identifiers in e to a new unique identifier. 
@@ -274,7 +320,7 @@
 (define (alpha-vary e [h-map (make-immutable-hasheq)])
   (type-case Expr e
    [num (n) e]
-    [id (v) (id (hash-ref h-map v (error "alpha-vary: unbound id")))]
+    [id (v) (id (hash-ref h-map v (λ () (error "alpha-vary: unbound id"))))]
     [bool (b) e]
     [bin-num-op (op left right) 
                 (bin-num-op op (alpha-vary left h-map)(alpha-vary right h-map))]
@@ -304,6 +350,8 @@
     [tfirst (e1) (tfirst (alpha-vary e1 h-map))]
     [trest (e1) (trest (alpha-vary e1 h-map))]))
 
+
+
 ;; TESTS FOR ALPHA-VARY
 ;; num
 (test (alpha-vary (parse '1)) (num 1))
@@ -322,17 +370,36 @@
 ;; unbound identifier
 (test/exn (alpha-vary (parse 'hi)) "alpha-vary")
 ;; with
-;(test (alpha-vary (parse '(with (id 5) 10))) (with 'id97080 (num 5) (num 10)))
-;; rec-with
-;(test (alpha-vary (parse '(rec (id 5) 10)))(rec-with 'id98442 (num 5) (num 10)))
-;; fun
+;(test (alpha-vary (parse '(with (id 5) 10)))
+;      (with 'id97080 (num 5) (num 10)))
+;(test (alpha-vary (parse '(with (x 1) x)))
+;      (with 'x113167 (num 1) (id 'x113167)))
+;(test (alpha-vary (parse '(with (x 1) (with (x x) x))))         
+;     (with 'x113848 (num 1) (with 'x113849 (id 'x113849) (id 'x113849))))
 
+;; rec-with
+;(alpha-vary (parse '(rec (x 1) x)))
+;       (rec-with 'x114632 (num 1) (id 'x114632))
+;(test (alpha-vary (parse '(rec (id 5) 10)))(rec-with 'id98442 (num 5) (num 10)))
+;(alpha-vary (parse '(rec (x 1) (rec (x x) x))))
+;       (rec-with 'x115115 (num 1) (rec-with 'x115116 (id 'x115115) (id 'x115116)))
+; (alpha-vary (parse '(rec (x (fun (x) x)) (x 1))))
+;     (rec-with 'x115501 (fun 'x115502 (id 'x115502)) (app (id 'x115501) (num 1)))
+;
+;; fun
+;(alpha-vary (parse '(fun (x) x) ))
+;     (fun 'x116021 (id 'x116021))
+;(alpha-vary (parse '(fun (x) (fun (x) x))))
+;    (fun 'x116297 (fun 'x116298 (id 'x116298)))
+;(alpha-vary (parse '(fun (x) (fun (y) x))))
+;    (fun 'x116568 (fun 'y116569 (id 'x116568)))
 ;; app
 
 ;; tempty
 (test (alpha-vary (parse 'tempty))(tempty))
 ;; tcons
 (test (alpha-vary (parse '(tcons 1 tempty))) (tcons (num 1) (tempty)))
+(test (alpha-vary (parse '(tcons true tempty))) (tcons (bool true) (tempty)))
 ;; tempty?
 (test (alpha-vary (parse '(tempty? 1))) (istempty (num 1)))
 ;; tfirst
@@ -393,7 +460,6 @@
                   (define nm-bound-body (gensym))
                   (define nm-body (gensym)))
             (append
-             (generate-constraints nm-bound-id bound-id)
              (generate-constraints nm-bound-body bound-body)
              (generate-constraints nm-body body)
              (list (eqc (t-var e-id) (t-var nm-body)))))]
@@ -402,7 +468,6 @@
                       (define nm-bound-body (gensym))
                       (define nm-body (gensym)))
                 (append
-                 (generate-constraints nm-bound-id bound-id)
                  (generate-constraints nm-bound-body bound-body)
                  (generate-constraints nm-body body)
                  (list (eqc (t-var e-id) (t-var nm-body)))))]
@@ -560,13 +625,131 @@
  (eqc (t-var 'x) (t-var 'g117373))
  (eqc (t-var 'g117371) (t-bool))))
 ;; with
-
+((constraint-list=? (generate-constraints 'x (parse '(with (x 1) x))))
+(list
+ (eqc (t-var 'g120360) (t-num))
+ (eqc (t-var 'g120361) (t-var 'x))
+ (eqc (t-var 'x) (t-var 'g120361))))
+((constraint-list=? (generate-constraints 'x (parse '(with (x 1) true))))
+(list
+ (eqc (t-var 'g124054) (t-num))
+ (eqc (t-var 'g124055) (t-bool))
+ (eqc (t-var 'x) (t-var 'g124055))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(with (x (fun (x) 1)) (fun (y) y)))))
+(list
+ (eqc (t-var 'g124786) (t-num))
+ (eqc (t-var 'x) (t-var 'g124785))
+ (eqc (t-var 'g124783) (t-fun (t-var 'g124785) (t-var 'g124786)))
+ (eqc (t-var 'g124788) (t-var 'y))
+ (eqc (t-var 'y) (t-var 'g124787))
+ (eqc (t-var 'g124784) (t-fun (t-var 'g124787) (t-var 'g124788)))
+ (eqc (t-var 'x) (t-var 'g124784))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(with (x ((fun (x) x) true)) x))))
+(list
+ (eqc (t-var 'g125179) (t-var 'x))
+ (eqc (t-var 'x) (t-var 'g125178))
+ (eqc (t-var 'g125175) (t-fun (t-var 'g125178) (t-var 'g125179)))
+ (eqc (t-var 'g125176) (t-bool))
+ (eqc (t-var 'g125173) (t-var 'g125177))
+ (eqc (t-var 'g125175) (t-fun (t-var 'g125176) (t-var 'g125177)))
+ (eqc (t-var 'g125174) (t-var 'x))
+ (eqc (t-var 'x) (t-var 'g125174))))
 ;; rec
-
+((constraint-list=? 
+ (generate-constraints 'x (parse '(rec (f f) f))))
+(list
+ (eqc (t-var 'g125765) (t-var 'f))
+ (eqc (t-var 'g125766) (t-var 'f))
+ (eqc (t-var 'x) (t-var 'g125766))))
+((constraint-list=? 
+  (generate-constraints 'x 
+    (parse '(rec (f (fun (x) 
+      (bif (iszero x) x (+ x (f (- x 1)))))) f))))
+(list
+ (eqc (t-var 'g126580) (t-var 'x))
+ (eqc (t-var 'g126577) (t-bool))
+ (eqc (t-var 'g126580) (t-num))
+ (eqc (t-var 'g126578) (t-var 'x))
+ (eqc (t-var 'g126581) (t-var 'x))
+ (eqc (t-var 'g126583) (t-var 'f))
+ (eqc (t-var 'g126586) (t-var 'x))
+ (eqc (t-var 'g126587) (t-num))
+ (eqc (t-var 'g126584) (t-num))
+ (eqc (t-var 'g126586) (t-num))
+ (eqc (t-var 'g126587) (t-num))
+ (eqc (t-var 'g126582) (t-var 'g126585))
+ (eqc (t-var 'g126583) (t-fun (t-var 'g126584) (t-var 'g126585)))
+ (eqc (t-var 'g126579) (t-num))
+ (eqc (t-var 'g126581) (t-num))
+ (eqc (t-var 'g126582) (t-num))
+ (eqc (t-var 'g126576) (t-var 'g126578))
+ (eqc (t-var 'g126576) (t-var 'g126579))
+ (eqc (t-var 'g126577) (t-bool))
+ (eqc (t-var 'x) (t-var 'g126575))
+ (eqc (t-var 'g126573) (t-fun (t-var 'g126575) (t-var 'g126576)))
+ (eqc (t-var 'g126574) (t-var 'f))
+ (eqc (t-var 'x) (t-var 'g126574))))
 ;; fun
-
+((constraint-list=? 
+  (generate-constraints 'x (parse '(fun (x) (fun (y) (+ x y))))))
+(list
+ (eqc (t-var 'g127708) (t-var 'x))
+ (eqc (t-var 'g127709) (t-var 'y))
+ (eqc (t-var 'g127707) (t-num))
+ (eqc (t-var 'g127708) (t-num))
+ (eqc (t-var 'g127709) (t-num))
+ (eqc (t-var 'y) (t-var 'g127706))
+ (eqc (t-var 'g127705) (t-fun (t-var 'g127706) (t-var 'g127707)))
+ (eqc (t-var 'x) (t-var 'g127704))
+ (eqc (t-var 'x) (t-fun (t-var 'g127704) (t-var 'g127705)))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(fun (x) 1))))
+(list
+ (eqc (t-var 'g128077) (t-num))
+ (eqc (t-var 'x) (t-var 'g128076))
+ (eqc (t-var 'x) (t-fun (t-var 'g128076) (t-var 'g128077)))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(fun (x) x))))
+(list
+ (eqc (t-var 'g128777) (t-var 'x))
+ (eqc (t-var 'x) (t-var 'g128776))
+ (eqc (t-var 'x) (t-fun (t-var 'g128776) (t-var 'g128777)))))
 ;; app
-
+((constraint-list=? 
+  (generate-constraints 'x (parse '((fun (x) 1) 1))))
+(list
+ (eqc (t-var 'g129124) (t-num))
+ (eqc (t-var 'x) (t-var 'g129123))
+ (eqc (t-var 'g129120) (t-fun (t-var 'g129123) (t-var 'g129124)))
+ (eqc (t-var 'g129121) (t-num))
+ (eqc (t-var 'x) (t-var 'g129122))
+ (eqc (t-var 'g129120) (t-fun (t-var 'g129121) (t-var 'g129122)))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '((fun (x) x) 1))))
+(list
+ (eqc (t-var 'g129698) (t-var 'x))
+ (eqc (t-var 'x) (t-var 'g129697))
+ (eqc (t-var 'g129694) (t-fun (t-var 'g129697) (t-var 'g129698)))
+ (eqc (t-var 'g129695) (t-num))
+ (eqc (t-var 'x) (t-var 'g129696))
+ (eqc (t-var 'g129694) (t-fun (t-var 'g129695) (t-var 'g129696)))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(+ 1 ((fun (x) x) (tfirst tempty))))))
+(list
+ (eqc (t-var 'g130399) (t-num))
+ (eqc (t-var 'g130405) (t-var 'x))
+ (eqc (t-var 'x) (t-var 'g130404))
+ (eqc (t-var 'g130401) (t-fun (t-var 'g130404) (t-var 'g130405)))
+ (eqc (t-var 'g130406) (t-list (t-var 'g130408)))
+ (eqc (t-var 'g130402) (t-var 'g130407))
+ (eqc (t-var 'g130406) (t-list (t-var 'g130407)))
+ (eqc (t-var 'g130400) (t-var 'g130403))
+ (eqc (t-var 'g130401) (t-fun (t-var 'g130402) (t-var 'g130403)))
+ (eqc (t-var 'x) (t-num))
+ (eqc (t-var 'g130399) (t-num))
+ (eqc (t-var 'g130400) (t-num))))
 ;; tempty
 ((constraint-list=?
   (generate-constraints 'x (parse 'tempty)))
@@ -600,8 +783,21 @@
       (eqc (t-var 'x) (t-bool)) 
       (eqc (t-var 'g140059) (t-list (t-var 'any)))))
 ;; tfirst
-
-
+((constraint-list=? 
+  (generate-constraints 'x (parse '(tfirst tempty))))
+(list
+ (eqc (t-var 'g130922) (t-list (t-var 'g130924)))
+ (eqc (t-var 'x) (t-var 'g130923))
+ (eqc (t-var 'g130922) (t-list (t-var 'g130923)))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(tfirst (tcons 4 tempty)))))
+(list
+ (eqc (t-var 'g131440) (t-num))
+ (eqc (t-var 'g131441) (t-list (t-var 'g131442)))
+ (eqc (t-var 'g131438) (t-list (t-var 'g131440)))
+ (eqc (t-var 'g131441) (t-list (t-var 'g131440)))
+ (eqc (t-var 'x) (t-var 'g131439))
+ (eqc (t-var 'g131438) (t-list (t-var 'g131439)))))
 ;; trest
 ((constraint-list=?
   (generate-constraints 'x (parse '(trest tempty))))
@@ -609,6 +805,15 @@
  (eqc (t-var 'g102415) (t-list (t-var 'g102417)))
  (eqc (t-var 'x) (t-list (t-var 'g102416)))
  (eqc (t-var 'g102415) (t-list (t-var 'g102416)))))
+((constraint-list=? 
+  (generate-constraints 'x (parse '(trest (tcons 1 tempty)))))
+(list
+ (eqc (t-var 'g132058) (t-num))
+ (eqc (t-var 'g132059) (t-list (t-var 'g132060)))
+ (eqc (t-var 'g132056) (t-list (t-var 'g132058)))
+ (eqc (t-var 'g132059) (t-list (t-var 'g132058)))
+ (eqc (t-var 'x) (t-list (t-var 'g132057)))
+ (eqc (t-var 'g132056) (t-list (t-var 'g132057)))))
 
 ;; 3.19.5 Unification
 
@@ -660,7 +865,7 @@
               (unify
                 (list* (eqc (t-list-elem lhs) (t-list-elem rhs)) (rest loc))
                 sub)]
-            [(and (t-fun? lhs) (t-fun? rhs)) 
+            [(and (t-fun? lhs) (t-fun? rhs))
               (unify
                 (list*
                   (eqc (t-fun-arg lhs) (t-fun-arg rhs))
@@ -670,9 +875,6 @@
             [else
                (error "Inconsistent types: ~a and ~a"
                  (eqc-lhs (first loc)) (eqc-rhs (first loc)))]))])))
-
-
-;; TESTS FOR UNIFICATION
 
 
 ;; 3.19.6 Inferring Types
@@ -740,7 +942,7 @@
 (test (type-is '(iszero 1) (t-bool)) #t)
 (test (type-is '(iszero 0) (t-bool)) #t)
 (test (type-is '(iszero (tfirst tempty)) (t-bool)) #t)
-(test (type-is '(iszero (tfirst (tcons 1 empty))) (t-bool)) #t)
+(test (type-is '(iszero (tfirst (tcons 1 tempty))) (t-bool)) #t)
 (test (type-is '(iszero ((fun (x) 0) true)) (t-bool)) #t) 
 (test/exn (run '(iszero true)) "")
 (test/exn (run '(iszero false)) "")
@@ -761,16 +963,16 @@
 
 ;; tempty & tcons
 (test (type-is 'tempty (t-list (t-var (gensym)))) #t)
-(test (type-is '(tcons 1 nempty) (t-list (t-num))) #t)
-(test (type-is '(tcons true nempty) (t-list (t-bool))) #t)
-(test (type-is '(tcons (fun (x) 1) nempty) 
+(test (type-is '(tcons 1 tempty) (t-list (t-num))) #t)
+(test (type-is '(tcons true tempty) (t-list (t-bool))) #t)
+(test (type-is '(tcons (fun (x) 1) tempty) 
                (t-list (t-fun (t-var (gensym)) (t-num)))) #t)
-(test (type-is '(tcons (fun (x) true) nempty) 
+(test (type-is '(tcons (fun (x) true) tempty) 
                (t-list (t-fun (t-var (gensym)) (t-bool)))) #t)
 (test (type-is '(tcons 1 (tcons 1 tempty)) (t-list (t-num))) #t)
 (test (type-is '(tcons (tcons 1 tempty) tempty) (t-list (t-list (t-num)))) #t)
 (test (type-is '(tcons (+ 1 1) tempty) (t-list (t-num))) #t)
-(test (type-is '(tcons ((fun (x) x) 1) nempty) (t-list (t-var (gensym)))) #t)
+(test/exn (run '(tcons ((fun (x) x) 1) nempty)) "")
 (test (type-is '(tcons true tempty) (t-list (t-bool))) #t)
 
 (test/exn (run '(tcons 1 1)) "")
@@ -782,8 +984,8 @@
 (test (run '(tempty? (tcons 1 tempty))) (t-bool))
 
 ;; tfirst & trest
-;(test (run '(tfirst tempty)) (t-num))
-;(test (run '(tfirst (tcons 1 tempty))) (t-num))
+(test (type-is '(tfirst tempty) (t-var (gensym))) #t)
+(test (run '(tfirst (tcons 1 tempty))) (t-num))
 (test/exn (run '(tfirst 1)) "")
 (test/exn (run '(tfirst true)) "")
 (test/exn (run '(tfirst false)) "")
@@ -797,59 +999,58 @@
 
 ;; fun & app
 (test/exn (run '(fun (x) t x)) "")
-(test (type-is '(fun (y)  y) (t-fun (t-var (gensym)) (t-var (gensym)))) #t)
+(test/exn (type-is '(fun (y)  y) (t-fun (t-var (gensym)) (t-var (gensym)))) "")
 
-(test (type-is '(fun (x) (+ x 1)) (t-fun (t-var (gensym)) (t-num))) #t)
+(test (type-is '(fun (x) (+ x 1)) (t-fun (t-num) (t-num))) #t)
 (test (type-is '(+ 1 ((fun (x) 1) 1)) (t-num)) #t)
-(test/exn (run '((fun (x) tempty) 1)) "")
-(test/exn (run '((fun (x) tempty) 1)) "")
-(test (run '((fun (x) tempty) true)) (t-list))
+(test (type-is '((fun (x) tempty) 1) (t-list (t-var (gensym)))) #t)
+(test (type-is '((fun (x) tempty) true) (t-list (t-var (gensym)))) #t)
 
 ;; with
-(test (run '(with (x true) (bif x false x))) (t-bool))
-(test (run '(with (x 1) (+ 1 x))) (t-num))
-(test (run '(with (x (fun (y : number) : number (* y y))) (x 2))) (t-num))
-(test (run '(with (x 1) (with (y 2) (+ x y)))) (t-num))
-(test/exn (run '(with (x 1) (with (y true) (+ x y)))) "")
-(test/exn (run '(with (x true) (with (y 1) (+ x y)))) "")
-(test/exn (run '(with (x true) (with (y 1) (bif x y x)))) "")
+(test (type-is '(with (x 1) x) (t-var (gensym))) #t)
+(test (type-is '(with (x 1) 1) (t-num)) #t)
+(test (type-is '(with (x true) (bif x false x)) (t-bool)) #t)
+(test (type-is '(with (x 1) (+ 1 x)) (t-num)) #t)
+(test (type-is '(with (x (fun (y) (* y y))) (x 2)) (t-var (gensym))) #t)
+(test (type-is '(with (x 1) (with (y 2) (+ x y))) (t-num)) #t)
+(test (type-is '(with (x 1) (with (y true) (+ x y))) (t-num)) #t)
+(test (type-is '(with (x true) (with (y 1) (+ x y))) (t-num)) #t)
+(test (type-is '(with (x true) (with (y 1) (bif x y x))) (t-bool)) #t)
 (test (run '(with (x true) (with (y 1) (bif x y (+ y 1))))) (t-num))
 
 
 
+;; rec-with
+(test (type-is '(rec (x 1) x) (t-var (gensym))) #t)
+(test (type-is '(rec (x 1) 1) (t-num)) #t)
+(test (type-is '(rec (x true) (bif x false x)) (t-bool)) #t)
+(test (type-is '(rec (x 1) (+ 1 x)) (t-num)) #t)
+(test (type-is '(rec (x (fun (y) (* y y))) (x 2)) (t-var (gensym))) #t)
+(test (type-is '(rec (x 1) (with (y 2) (+ x y))) (t-num)) #t)
+(test (type-is '(rec (x 1) (with (y true) (+ x y))) (t-num)) #t)
+(test (type-is '(rec (x true) (with (y 1) (+ x y))) (t-num)) #t)
+(test (type-is '(rec (x true) (with (y 1) (bif x y x))) (t-bool)) #t)
+(test (run '(rec (x true) (with (y 1) (bif x y (+ y 1))))) (t-num))
+
+
+
+;; with errors
+;(test/exn (run '(with (1 x) 1)) "")
+(test/exn (run '(with (x 1) y)) "")
+(test/exn (run '(with (x 1) 'hi)) "")
+
+;; rec errors
+;(test/exn (run '(rec (1 x) 1)) "")
+(test/exn (run '(rec (x 1) y)) "")
+(test/exn (run '(rec (x 1) 'hi)) "")
+
+
+;;fun
+(test (type-is '(fun (x) 0) (t-fun (t-var 'a) (t-num))) #t)
+(test (type-is
+  '(fun (x) ((fun (x) (+ x 1)) (bif x 1 0)))
+  (t-fun (t-bool) (t-num))) #t)
+
 ;;EXTRA CREDIT
-(test (type-is '(fun (x) (first tempty)) (t-fun (t-var 'a) (t-var 'b))) #t)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+(test (type-is '(fun (x) (tfirst tempty)) (t-fun (t-var 'a) (t-var 'b))) #t)
 
