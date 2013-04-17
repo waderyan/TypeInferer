@@ -658,15 +658,15 @@
               (unify (rest loc) sub)]
             [(and (t-list? lhs) (t-list? rhs)) 
               (unify
-                (list* (eqc (t-list-elem lhs) (t-list-elem rhs)) loc)
+                (list* (eqc (t-list-elem lhs) (t-list-elem rhs)) (rest loc))
                 sub)]
             [(and (t-fun? lhs) (t-fun? rhs)) 
               (unify
                 (list*
                   (eqc (t-fun-arg lhs) (t-fun-arg rhs))
                   (eqc (t-fun-result lhs) (t-fun-result rhs))
-                  loc
-                sub))]
+                  (rest loc))
+                sub)]
             [else
                (error "Inconsistent types: ~a and ~a"
                  (eqc-lhs (first loc)) (eqc-rhs (first loc)))]))])))
